@@ -6,11 +6,11 @@ use std::sync::atomic::{ AtomicUsize, AtomicBool, Ordering };
 static WORK_RESULT: AtomicUsize = AtomicUsize::new(0);
 static WORK_DONE: AtomicBool = AtomicBool::new(false);
 
-fn work_thread(mut data: Vec<u8>) {
-    WORK_DONE.store(false, Ordering::SeqCst);
+fn do_work(start_day: usize, thread_id: usize,
+           num_iter: usize, data: &mut Vec<u8>) {
+    for i in 0..num_iter {
+        println!("{}# Day {}", thread_id, start_day + i + 1);
 
-    for i in 0..256 {
-        println!("Day {}", i + 1);
         let mut new_fishes = Vec::new();
 
         for fish in data.iter_mut() {
@@ -23,8 +23,66 @@ fn work_thread(mut data: Vec<u8>) {
 
         data.extend(new_fishes);
     }
+}
 
-    WORK_RESULT.store(data.len(), Ordering::SeqCst);
+fn work_thread(mut data: Vec<u8>) {
+    const NUM_THREADS: usize = 24;
+    const NUM_ITER: usize = 256;
+    const SPLIT_POINT: usize = 150;
+
+    WORK_DONE.store(false, Ordering::SeqCst);
+
+    for i in 0..SPLIT_POINT {
+        do_work(i + 1, 0, 1, &mut data);
+    }
+
+    // Split the work up for more threads
+    let data_length = data.len();
+    let chunk_size = data_length / NUM_THREADS;
+    let remaining = data_length % NUM_THREADS;
+
+    println!("Spliting up work: Chunk size - {}", chunk_size);
+
+    let mut offset = 0;
+    let mut thread_id = 0;
+
+    // let mut thread_info = Arc::new(Mutex::new(Vec::new()));
+
+    let mut threads = Vec::new();
+
+    for i in 0..NUM_THREADS {
+        let length = if i == 0 {
+            chunk_size + remaining
+        } else {
+            chunk_size
+        };
+
+        let chunk = &data[offset..offset+length];
+
+        let mut thread_data: Vec<u8> = Vec::new();
+        thread_data.extend(chunk);
+
+        let handle = std::thread::spawn(move || {
+            let mut data = thread_data;
+            do_work(SPLIT_POINT, thread_id,
+                    NUM_ITER - SPLIT_POINT, &mut data);
+
+            WORK_RESULT.fetch_add(data.len(), Ordering::SeqCst);
+        });
+
+        threads.push(handle);
+
+        thread_id += 1;
+        offset += length;
+    }
+
+    for handle in threads {
+        handle.join()
+            .expect("Thread panic");
+    }
+
+    println!("Threads done?");
+
     WORK_DONE.store(true, Ordering::SeqCst);
 }
 
