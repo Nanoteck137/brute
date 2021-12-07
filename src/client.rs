@@ -7,7 +7,7 @@ static WORK_RESULT: AtomicUsize = AtomicUsize::new(0);
 static WORK_DONE: AtomicBool = AtomicBool::new(false);
 
 fn do_work(start_day: usize, thread_id: usize,
-           num_iter: usize, data: &mut Vec<u8>) {
+           num_iter: usize, data: &mut Vec<i8>) {
     for i in 0..num_iter {
         println!("{}# Day {}", thread_id, start_day + i + 1);
 
@@ -15,8 +15,8 @@ fn do_work(start_day: usize, thread_id: usize,
 
         for fish in data.iter_mut() {
             *fish -= 1;
-            if *fish <= 0 {
-                *fish = 7;
+            if *fish < 0 {
+                *fish = 6;
                 new_fishes.push(8);
             }
         }
@@ -25,10 +25,10 @@ fn do_work(start_day: usize, thread_id: usize,
     }
 }
 
-fn work_thread(mut data: Vec<u8>) {
+fn work_thread(mut data: Vec<i8>) {
     const NUM_THREADS: usize = 24;
-    const NUM_ITER: usize = 80;
-    const SPLIT_POINT: usize = 40;
+    const NUM_ITER: usize = 256;
+    const SPLIT_POINT: usize = 0;
 
     WORK_DONE.store(false, Ordering::SeqCst);
 
@@ -57,7 +57,7 @@ fn work_thread(mut data: Vec<u8>) {
 
         let chunk = &data[offset..offset+length];
 
-        let mut thread_data: Vec<u8> = Vec::new();
+        let mut thread_data: Vec<i8> = Vec::new();
         thread_data.extend(chunk);
 
         let handle = std::thread::spawn(move || {
@@ -142,9 +142,14 @@ pub fn start(name: String) {
                     data.extend(&buffer[2..2+data_length]);
                     println!("Data: {:?}", data);
 
+                    let mut thread_data = Vec::with_capacity(data_length);
+                    for num in data {
+                        thread_data.push(num as i8);
+                    }
+
                     println!("Spawning work thread");
                     std::thread::spawn(move || {
-                        work_thread(data);
+                        work_thread(thread_data);
                     });
 
                     working = true;

@@ -322,6 +322,6 @@ fn handle_connection(work_queue: Arc<Mutex<VecDeque<Work>>>,
             }
         }
 
-        std::thread::sleep_ms(5000);
+        std::thread::sleep_ms(1000);
     }
 }
