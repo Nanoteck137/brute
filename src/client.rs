@@ -9,7 +9,7 @@ static WORK_DONE: AtomicBool = AtomicBool::new(false);
 fn do_work(start_day: usize, thread_id: usize,
            num_iter: usize, data: &mut Vec<i8>) {
     for i in 0..num_iter {
-        println!("{}# Day {}", thread_id, start_day + i + 1);
+        // println!("{}# Day {}", thread_id, start_day + i + 1);
 
         let mut new_fishes = Vec::new();
 
