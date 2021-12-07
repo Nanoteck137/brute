@@ -28,9 +28,10 @@ fn do_work(start_day: usize, thread_id: usize,
 fn work_thread(mut data: Vec<i8>) {
     const NUM_THREADS: usize = 24;
     const NUM_ITER: usize = 256;
-    const SPLIT_POINT: usize = 0;
+    const SPLIT_POINT: usize = 150;
 
     WORK_DONE.store(false, Ordering::SeqCst);
+    WORK_RESULT.store(0, Ordering::SeqCst);
 
     for i in 0..SPLIT_POINT {
         do_work(i + 1, 0, 1, &mut data);
