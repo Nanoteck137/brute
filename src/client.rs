@@ -46,8 +46,6 @@ fn work_thread(mut data: Vec<u8>) {
     let mut offset = 0;
     let mut thread_id = 0;
 
-    // let mut thread_info = Arc::new(Mutex::new(Vec::new()));
-
     let mut threads = Vec::new();
 
     for i in 0..NUM_THREADS {
@@ -165,6 +163,8 @@ pub fn start(name: String) {
                         bytes.push(1);
                         bytes.extend(result.to_le_bytes());
                         stream.write(&bytes);
+
+                        working = false;
                     } else {
                         let bytes = [0u8];
                         stream.write(&bytes);

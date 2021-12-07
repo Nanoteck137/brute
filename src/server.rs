@@ -2,6 +2,7 @@ use std::io::{ Read, Write };
 use std::net::{ TcpListener, TcpStream };
 use std::sync::{ Mutex, Arc };
 use std::sync::atomic::{ AtomicUsize, Ordering };
+use std::collections::VecDeque;
 
 // Commands:
 //   - 0x01: Identify
@@ -29,8 +30,10 @@ enum Status {
 
 static CLIENT_ID: AtomicUsize = AtomicUsize::new(0);
 
+#[derive(Debug)]
 struct Work {
     data: Vec<u8>,
+    result: Option<u64>,
 }
 
 struct Client {
@@ -171,7 +174,42 @@ fn handle_clients(clients: Arc<Mutex<Vec<Client>>>) {
 }
 */
 
+fn load_data() -> Vec<u8> {
+    let data = std::fs::read_to_string("data.txt")
+        .expect("Failed to load data.txt");
+    let data = data.trim();
+
+    let mut result = Vec::new();
+    for split in data.split(",") {
+        let num = split.parse::<u8>()
+            .expect("Failed to parse split string");
+
+        result.push(num);
+    }
+
+    result
+}
+
+fn prepare_work_queue(data: Vec<u8>) -> (Arc<Mutex<VecDeque<Work>>>, usize) {
+    let mut result = VecDeque::new();
+
+    for num in data {
+        result.push_back(Work {
+            data: vec![num],
+            result: None,
+        });
+    }
+
+    let num_entries = result.len();
+
+    (Arc::new(Mutex::new(result)), num_entries)
+}
+
 pub fn start() {
+    let data = load_data();
+    let work_done = Arc::new(Mutex::new(Vec::<Work>::new()));
+    let (work_queue, num_queue_entries) = prepare_work_queue(data);
+
     let listener = TcpListener::bind("192.168.1.150:1234")
         .expect("Failed to bind TcpListener to '127.0.0.1:1234'");
 
@@ -183,6 +221,37 @@ pub fn start() {
         handle_clients(clients_clone);
     });
     */
+
+    let queue = work_queue.clone();
+    let done_queue = work_done.clone();
+    std::thread::spawn(move || {
+        loop {
+            {
+                let lock = queue.lock().unwrap();
+                if lock.len() <= 0 {
+                    println!("Work queue empty");
+                } else {
+                    println!("There is still {} work requests", lock.len());
+                }
+            }
+
+            {
+                let lock = done_queue.lock().unwrap();
+                if lock.len() >= num_queue_entries {
+                    println!("Processed all of the work queue");
+
+                    let mut sum = 0u64;
+                    for result in lock.iter() {
+                        sum += result.result.unwrap();
+                    }
+
+                    println!("Answer: {}", sum);
+                }
+            }
+
+            std::thread::sleep_ms(2000);
+        }
+    });
 
     for stream in listener.incoming() {
         println!("Connection");
@@ -196,8 +265,10 @@ pub fn start() {
             name: "".to_string(),
         };
 
+        let queue = work_queue.clone();
+        let done_queue = work_done.clone();
         std::thread::spawn(move || {
-            handle_connection(&mut client);
+            handle_connection(queue, done_queue, &mut client);
             println!("Disconnecting client: {}", client.name);
         });
 
@@ -207,23 +278,29 @@ pub fn start() {
     }
 }
 
-fn handle_connection(client: &mut Client) -> Option<()> {
+fn handle_connection(work_queue: Arc<Mutex<VecDeque<Work>>>,
+                     done_queue: Arc<Mutex<Vec<Work>>>,
+                     client: &mut Client)
+    -> Option<()>
+{
     client.init();
     client.identify();
 
     println!("Client Name: {}", client.name);
 
-    let test_work = Work {
-        data: vec![2, 3, 8, 1],
-    };
+    let mut current_work = None;
 
     loop {
-
         let status = client.get_status()?;
         match status {
             Status::Waiting => {
                 println!("{}: Need to send client some work", client.name);
-                client.send_work(&test_work);
+                let work = {
+                    work_queue.lock().unwrap().pop_front()?
+                };
+                client.send_work(&work);
+
+                current_work = Some(work);
             }
 
             Status::Running => {
@@ -235,6 +312,13 @@ fn handle_connection(client: &mut Client) -> Option<()> {
 
                 let result = client.get_result()?;
                 println!("Got result: {}", result);
+
+                let mut work = current_work.take()
+                    .expect("No current work?");
+                work.result = Some(result);
+                {
+                    done_queue.lock().unwrap().push(work);
+                }
             }
         }
 
