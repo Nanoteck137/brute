@@ -205,22 +205,13 @@ fn prepare_work_queue(data: Vec<u8>) -> (Arc<Mutex<VecDeque<Work>>>, usize) {
     (Arc::new(Mutex::new(result)), num_entries)
 }
 
-pub fn start() {
+pub fn start(bind_addr: String) {
     let data = load_data();
     let work_done = Arc::new(Mutex::new(Vec::<Work>::new()));
     let (work_queue, num_queue_entries) = prepare_work_queue(data);
 
-    let listener = TcpListener::bind("192.168.1.150:1234")
-        .expect("Failed to bind TcpListener to '127.0.0.1:1234'");
-
-    /*
-    let clients = Arc::new(Mutex::new(Vec::new()));
-
-    let clients_clone = clients.clone();
-    std::thread::spawn(move || {
-        handle_clients(clients_clone);
-    });
-    */
+    let listener = TcpListener::bind(bind_addr)
+        .expect("Failed to bind TcpListener to bind address");
 
     let queue = work_queue.clone();
     let done_queue = work_done.clone();
@@ -229,7 +220,7 @@ pub fn start() {
             {
                 let lock = queue.lock().unwrap();
                 if lock.len() <= 0 {
-                    println!("Work queue empty");
+                    // println!("Work queue empty");
                 } else {
                     println!("There is still {} work requests", lock.len());
                 }
@@ -246,6 +237,7 @@ pub fn start() {
                     }
 
                     println!("Answer: {}", sum);
+                    break;
                 }
             }
 

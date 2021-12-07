@@ -25,8 +25,7 @@ fn do_work(start_day: usize, thread_id: usize,
     }
 }
 
-fn work_thread(mut data: Vec<i8>) {
-    const NUM_THREADS: usize = 24;
+fn work_thread(num_threads: usize, mut data: Vec<i8>) {
     const NUM_ITER: usize = 256;
     const SPLIT_POINT: usize = 150;
 
@@ -39,8 +38,8 @@ fn work_thread(mut data: Vec<i8>) {
 
     // Split the work up for more threads
     let data_length = data.len();
-    let chunk_size = data_length / NUM_THREADS;
-    let remaining = data_length % NUM_THREADS;
+    let chunk_size = data_length / num_threads;
+    let remaining = data_length % num_threads;
 
     println!("Spliting up work: Chunk size - {}", chunk_size);
 
@@ -49,7 +48,7 @@ fn work_thread(mut data: Vec<i8>) {
 
     let mut threads = Vec::new();
 
-    for i in 0..NUM_THREADS {
+    for i in 0..num_threads {
         let length = if i == 0 {
             chunk_size + remaining
         } else {
@@ -85,8 +84,8 @@ fn work_thread(mut data: Vec<i8>) {
     WORK_DONE.store(true, Ordering::SeqCst);
 }
 
-pub fn start(name: String) {
-    let mut stream = TcpStream::connect("192.168.1.150:1234")
+pub fn start(server_address: String, name: String, num_threads: usize) {
+    let mut stream = TcpStream::connect(server_address)
         .expect("Failed to connect to server");
 
     stream.set_nonblocking(true)
@@ -150,7 +149,7 @@ pub fn start(name: String) {
 
                     println!("Spawning work thread");
                     std::thread::spawn(move || {
-                        work_thread(thread_data);
+                        work_thread(num_threads, thread_data);
                     });
 
                     working = true;
